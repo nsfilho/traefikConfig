@@ -15,18 +15,30 @@ npm install -g git+https://github.com/nsfilho/traefikConfig
 
 # Executing
 
-Local execution (if you are running in a swarm manager):
+Local execution, without cache:
 
 ```sh
-traefikConfig
+traefikconfig -l -n
 ```
 
-Remote execution (first time):
+Remote execution, without cache:
 
 ```sh
-traefikConfig -r server.mydomain.com -p 22 -u root
+traefikconfig -r server.mydomain.com -p 22 -u root -n
 ```
 
 > After you pass this parameters, the software will generate `~/.traefikConfig` file to save this options.
 
 **Tips:** you can pass as `-f <search>` to filter list of containers.
+
+# Help
+
+You always can use:
+
+```sh
+traefikconfig --help
+```
+
+If you have any doubts or suggestions, please contact me!
+
+[E-mail: nsfilho@icloud.com](mailto:nsfilho@icloud.com)

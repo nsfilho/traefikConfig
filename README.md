@@ -10,7 +10,7 @@ questions in a interactive way.
 # Installation
 
 ```sh
-npm install -G git+https://github.com/nsfilho/traefikconfig.git
+npm install -g git+https://github.com/nsfilho/traefikconfig.git
 ```
 
 # Executing

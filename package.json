@@ -1,5 +1,5 @@
 {
-    "name": "traefikconfig",
+    "name": "traefikConfig",
     "version": "1.0.1",
     "description": "Configuracao do Traefik",
     "main": "src/index.ts",

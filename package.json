@@ -3,7 +3,7 @@
     "version": "1.0.1",
     "description": "Configuracao do Traefik",
     "main": "src/index.ts",
-    "bin": "./build/index.js",
+    "bin": "./dist/index.js",
     "author": "Nelio Santos",
     "license": "UNLICENSED",
     "scripts": {

@@ -166,6 +166,7 @@ const buildQuestions = (): Inquirer.QuestionCollection => [
             { name: 'Não', value: false, checked: true },
         ],
         default: true,
+        when: (): boolean => !program.showCompose,
     },
 ];
 
@@ -180,13 +181,18 @@ const execute = (): void => {
         const labels = convertLabelsToObject(containerInfo[0].Spec.Labels).filter(f => f.key.match(/traefik/));
         const cmds: string[] = [];
         const labelAdd: string[] = [];
+        const labelCompose: string[] = [];
         const labelRm: string[] = [];
         const hosts = answers.hosts.split('\n').filter(l => l.length > 0);
         const hostConfig = hosts.reduce(
             (acc, cur, idx) => `${acc}Host(\\\`${cur}\\\`)${idx < hosts.length - 1 ? '||' : ''}`,
             '',
         );
-        const dupadd = (lbl: string): number => labelAdd.push(`--label-add "${lbl}"`);
+        const dupadd = (lbl: string): number => {
+            labelAdd.push(`--label-add "${lbl}"`);
+            labelCompose.push(`- "${lbl}"`);
+            return labelAdd.length;
+        };
         const duprm = (lbl: string): number => labelRm.push(`--label-rm "${lbl}"`);
 
         const middlewaresHttp: string[] = [];
@@ -229,7 +235,6 @@ const execute = (): void => {
                 .filter(l => l.trim().length > 0)
                 .map(value => {
                     const [user, password] = value.split(':');
-                    console.log(value);
                     dupadd(`traefikConfig.clearPassword.${user}=${password}`);
                     return `${user}:${bcrypt.hashSync(password).replace(/\$/g, '\\$')}`;
                 });
@@ -260,38 +265,43 @@ const execute = (): void => {
         cmds.push(`docker service update \\\n${labelRm.join(' \\\n')} \\\n${containerName}`);
         cmds.push(`docker service update \\\n${labelAdd.join(' \\\n')} \\\n${containerName}`);
 
-        // Exibie as respostas em tela
-        const shellCmds = cmds.map(cmd => (config.remote ? config.shell.replace('%%cmd%%', cmd) : cmd)).join('\n');
-        console.log(shellCmds);
+        console.log('# Showing in a compose format and as shell comments');
+        labelCompose.forEach(lbl => console.log(lbl));
 
-        if (answers.executeOnFinish) {
-            console.log('\n\n# Executing commands...');
-            const shell: ShellConfig = config.remote
-                ? {
-                      shell: 'ssh',
-                      args: [
-                          //   '-t',
-                          `-p ${config.port}`,
-                          `${config.username}@${config.server}`,
-                          '/bin/sh',
-                      ],
-                  }
-                : { shell: '/bin/sh', args: [] };
+        if (!program.showCompose) {
+            // Exibie as respostas em tela
+            const shellCmds = cmds.map(cmd => (config.remote ? config.shell.replace('%%cmd%%', cmd) : cmd)).join('\n');
+            console.log(shellCmds);
 
-            let dataOut = '';
-            const shellCmd = spawn(shell.shell, shell.args);
-            shellCmd.stdout.on('data', data => {
-                dataOut += data.toString();
-            });
-            shellCmd.stderr.on('data', data => {
-                dataOut += data.toString();
-            });
-            shellCmd.on('close', code => {
-                if (code !== 0) dataOut += `\n${config.server}: exit with code ${code}`;
-                console.log(`# ${dataOut.split('\n').join('\n# ')}`);
-            });
-            cmds.forEach(cmd => shellCmd.stdin.write(`${cmd}\n`));
-            shellCmd.stdin.end();
+            if (answers.executeOnFinish) {
+                console.log('\n\n# Executing commands...');
+                const shell: ShellConfig = config.remote
+                    ? {
+                          shell: 'ssh',
+                          args: [
+                              //   '-t',
+                              `-p ${config.port}`,
+                              `${config.username}@${config.server}`,
+                              '/bin/sh',
+                          ],
+                      }
+                    : { shell: '/bin/sh', args: [] };
+
+                let dataOut = '';
+                const shellCmd = spawn(shell.shell, shell.args);
+                shellCmd.stdout.on('data', data => {
+                    dataOut += data.toString();
+                });
+                shellCmd.stderr.on('data', data => {
+                    dataOut += data.toString();
+                });
+                shellCmd.on('close', code => {
+                    if (code !== 0) dataOut += `\n${config.server}: exit with code ${code}`;
+                    console.log(`# ${dataOut.split('\n').join('\n# ')}`);
+                });
+                cmds.forEach(cmd => shellCmd.stdin.write(`${cmd}\n`));
+                shellCmd.stdin.end();
+            }
         }
     });
 };
@@ -304,6 +314,7 @@ program
     .option('-p, --port <port>', 'ssh port on remote server')
     .option('-u, --username <username>', 'ssh username on remote server')
     .option('-n, --no-cache', 'No cache for containers')
+    .option('-s, --show-compose', 'output informations as in compose file')
     .option('-f, --filter <containerName>');
 
 program.parse(process.argv);

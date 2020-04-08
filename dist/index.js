@@ -138,6 +138,16 @@ const buildQuestions = () => [
     },
     {
         type: 'list',
+        name: 'cors',
+        message: 'Deseja habilitar Access-Control-Allow-Origin',
+        default: false,
+        choices: [
+            { name: 'Sim', value: true, checked: false },
+            { name: 'Não', value: false, checked: true },
+        ],
+    },
+    {
+        type: 'list',
         name: 'executeOnFinish',
         message: 'Deseja executar ao finalizar?',
         choices: [
@@ -164,8 +174,9 @@ const execute = () => {
         const hosts = answers.hosts.split('\n').filter(l => l.length > 0);
         const hostConfig = hosts.reduce((acc, cur, idx) => `${acc}Host(\\\`${cur}\\\`)${idx < hosts.length - 1 ? '||' : ''}`, '');
         const dupadd = (lbl) => {
+            const composeFmt = lbl.replace(/\\`/g, '`').replace(/\\\$/g, '$$');
             labelAdd.push(`--label-add "${lbl}"`);
-            labelCompose.push(`- "${lbl}"`);
+            labelCompose.push(`- "${composeFmt}"`);
             return labelAdd.length;
         };
         const duprm = (lbl) => labelRm.push(`--label-rm "${lbl}"`);
@@ -219,6 +230,12 @@ const execute = () => {
             if (answers.ssl)
                 middlewaresHttps.push(`${containerNameDashed}-secPolicy`);
             middlewaresHttp.push(`${containerNameDashed}-secPolicy`);
+        }
+        if (answers.cors) {
+            dupadd(`${sMiddle}-cors.headers.customresponseheaders.Access-Control-Allow-Origin=*`);
+            if (answers.ssl)
+                middlewaresHttps.push(`${containerNameDashed}-cors`);
+            middlewaresHttp.push(`${containerNameDashed}-cors`);
         }
         if (middlewaresHttp.length > 0) {
             dupadd(`${sMiddle}-chain.chain.middlewares=${middlewaresHttp.join(',')}`);

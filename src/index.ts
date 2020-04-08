@@ -24,6 +24,7 @@ interface Answers {
     auth: boolean;
     authUsers: string;
     securityPolicy: boolean;
+    cors: boolean;
 }
 
 interface ShellConfig {
@@ -159,6 +160,16 @@ const buildQuestions = (): Inquirer.QuestionCollection => [
     },
     {
         type: 'list',
+        name: 'cors',
+        message: 'Deseja habilitar Access-Control-Allow-Origin',
+        default: false,
+        choices: [
+            { name: 'Sim', value: true, checked: false },
+            { name: 'Não', value: false, checked: true },
+        ],
+    },
+    {
+        type: 'list',
         name: 'executeOnFinish',
         message: 'Deseja executar ao finalizar?',
         choices: [
@@ -189,8 +200,9 @@ const execute = (): void => {
             '',
         );
         const dupadd = (lbl: string): number => {
+            const composeFmt = lbl.replace(/\\`/g, '`').replace(/\\\$/g, '$$');
             labelAdd.push(`--label-add "${lbl}"`);
-            labelCompose.push(`- "${lbl}"`);
+            labelCompose.push(`- "${composeFmt}"`);
             return labelAdd.length;
         };
         const duprm = (lbl: string): number => labelRm.push(`--label-rm "${lbl}"`);
@@ -250,6 +262,12 @@ const execute = (): void => {
             );
             if (answers.ssl) middlewaresHttps.push(`${containerNameDashed}-secPolicy`);
             middlewaresHttp.push(`${containerNameDashed}-secPolicy`);
+        }
+
+        if (answers.cors) {
+            dupadd(`${sMiddle}-cors.headers.customresponseheaders.Access-Control-Allow-Origin=*`);
+            if (answers.ssl) middlewaresHttps.push(`${containerNameDashed}-cors`);
+            middlewaresHttp.push(`${containerNameDashed}-cors`);
         }
 
         if (middlewaresHttp.length > 0) {

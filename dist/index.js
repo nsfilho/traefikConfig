@@ -12,6 +12,12 @@ const containers_1 = require("./containers");
 const config_1 = require("./config");
 const buildQuestions = () => [
     {
+        type: 'string',
+        name: 'network',
+        message: 'Proxy network name:',
+        default: 'proxy',
+    },
+    {
         type: 'list',
         name: 'container',
         message: 'Container name:',
@@ -21,6 +27,13 @@ const buildQuestions = () => [
                 value: container.id,
             };
         }),
+        when: () => !commander_1.default.fakeContainer,
+    },
+    {
+        type: 'string',
+        name: 'container',
+        message: 'Container name (fake mode):',
+        when: () => commander_1.default.fakeContainer,
     },
     {
         type: 'string',
@@ -155,7 +168,7 @@ const buildQuestions = () => [
             { name: 'Não', value: false, checked: true },
         ],
         default: true,
-        when: () => !commander_1.default.showCompose,
+        when: () => !commander_1.default.showCompose && !commander_1.default.fakeContainer,
     },
 ];
 const execute = () => {
@@ -163,10 +176,12 @@ const execute = () => {
     const { config } = config_1.programOptions;
     inquirer_1.default.prompt(questions).then(answers => {
         // Prepara o ambiente
-        const containerInfo = JSON.parse(containers_1.getContainerInfo(answers.container));
-        const containerName = containerInfo[0].Spec.Name;
+        const containerInfo = !commander_1.default.fakeContainer ? JSON.parse(containers_1.getContainerInfo(answers.container)) : {};
+        const containerName = !commander_1.default.fakeContainer ? containerInfo[0].Spec.Name : answers.container;
         const containerNameDashed = containerName.replace('_', '-');
-        const labels = containers_1.convertLabelsToObject(containerInfo[0].Spec.Labels).filter(f => f.key.match(/traefik/));
+        const labels = !commander_1.default.fakeContainer
+            ? containers_1.convertLabelsToObject(containerInfo[0].Spec.Labels).filter(f => f.key.match(/traefik/))
+            : [];
         const cmds = [];
         const labelAdd = [];
         const labelCompose = [];
@@ -187,7 +202,7 @@ const execute = () => {
         // Prepara os comandos
         labels.forEach(v => duprm(v.key));
         dupadd('traefik.enable=true');
-        dupadd('traefik.docker.network=proxy');
+        dupadd(`traefik.docker.network=${answers.network}`);
         dupadd(`traefik.http.services.${containerNameDashed}.loadbalancer.server.port=${answers.port}`);
         if (answers.ssl) {
             dupadd(`${sRoute}-secure.entrypoints=${answers.entrypointHttps}`);
@@ -250,7 +265,7 @@ const execute = () => {
         cmds.push(`docker service update \\\n${labelAdd.join(' \\\n')} \\\n${containerName}`);
         console.log('# Showing in a compose format and as shell comments');
         labelCompose.forEach(lbl => console.log(lbl));
-        if (!commander_1.default.showCompose) {
+        if (!commander_1.default.showCompose && !commander_1.default.fakeContainer) {
             // Exibie as respostas em tela
             const shellCmds = cmds.map(cmd => (config.remote ? config.shell.replace('%%cmd%%', cmd) : cmd)).join('\n');
             console.log(shellCmds);
@@ -295,6 +310,7 @@ commander_1.default
     .option('-u, --username <username>', 'ssh username on remote server')
     .option('-n, --no-cache', 'No cache for containers')
     .option('-s, --show-compose', 'output informations as in compose file')
+    .option('-i, --fake-container', 'generate labels for a simulated container')
     .option('-f, --filter <containerName>');
 commander_1.default.parse(process.argv);
 if (commander_1.default.local) {
@@ -304,5 +320,6 @@ else if (commander_1.default.remote) {
     config_1.writeServer(commander_1.default.remote, commander_1.default.username, commander_1.default.port);
 }
 config_1.programOptions.noCache = !commander_1.default.cache;
-containers_1.loadContainers(commander_1.default.filter);
+if (!commander_1.default.fakeContainer)
+    containers_1.loadContainers(commander_1.default.filter);
 execute();

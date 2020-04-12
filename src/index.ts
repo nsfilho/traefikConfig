@@ -8,6 +8,7 @@ import { loadContainers, containers, getContainerInfo, convertLabelsToObject } f
 import { loadConfig, programOptions, writeServer, writeLocal } from './config';
 
 interface Answers {
+    network: string;
     entrypointHttp: string;
     entrypointHttps: string;
     container: string;
@@ -34,6 +35,12 @@ interface ShellConfig {
 
 const buildQuestions = (): Inquirer.QuestionCollection => [
     {
+        type: 'string',
+        name: 'network',
+        message: 'Proxy network name:',
+        default: 'proxy',
+    },
+    {
         type: 'list',
         name: 'container',
         message: 'Container name:',
@@ -43,6 +50,13 @@ const buildQuestions = (): Inquirer.QuestionCollection => [
                 value: container.id,
             };
         }),
+        when: (): boolean => !program.fakeContainer,
+    },
+    {
+        type: 'string',
+        name: 'container',
+        message: 'Container name (fake mode):',
+        when: (): boolean => program.fakeContainer,
     },
     {
         type: 'string',
@@ -177,7 +191,7 @@ const buildQuestions = (): Inquirer.QuestionCollection => [
             { name: 'Não', value: false, checked: true },
         ],
         default: true,
-        when: (): boolean => !program.showCompose,
+        when: (): boolean => !program.showCompose && !program.fakeContainer,
     },
 ];
 
@@ -186,10 +200,12 @@ const execute = (): void => {
     const { config } = programOptions;
     Inquirer.prompt<Answers>(questions).then(answers => {
         // Prepara o ambiente
-        const containerInfo = JSON.parse(getContainerInfo(answers.container));
-        const containerName = containerInfo[0].Spec.Name;
+        const containerInfo = !program.fakeContainer ? JSON.parse(getContainerInfo(answers.container)) : {};
+        const containerName = !program.fakeContainer ? containerInfo[0].Spec.Name : answers.container;
         const containerNameDashed = containerName.replace('_', '-');
-        const labels = convertLabelsToObject(containerInfo[0].Spec.Labels).filter(f => f.key.match(/traefik/));
+        const labels = !program.fakeContainer
+            ? convertLabelsToObject(containerInfo[0].Spec.Labels).filter(f => f.key.match(/traefik/))
+            : [];
         const cmds: string[] = [];
         const labelAdd: string[] = [];
         const labelCompose: string[] = [];
@@ -216,7 +232,7 @@ const execute = (): void => {
         // Prepara os comandos
         labels.forEach(v => duprm(v.key));
         dupadd('traefik.enable=true');
-        dupadd('traefik.docker.network=proxy');
+        dupadd(`traefik.docker.network=${answers.network}`);
         dupadd(`traefik.http.services.${containerNameDashed}.loadbalancer.server.port=${answers.port}`);
         if (answers.ssl) {
             dupadd(`${sRoute}-secure.entrypoints=${answers.entrypointHttps}`);
@@ -286,7 +302,7 @@ const execute = (): void => {
         console.log('# Showing in a compose format and as shell comments');
         labelCompose.forEach(lbl => console.log(lbl));
 
-        if (!program.showCompose) {
+        if (!program.showCompose && !program.fakeContainer) {
             // Exibie as respostas em tela
             const shellCmds = cmds.map(cmd => (config.remote ? config.shell.replace('%%cmd%%', cmd) : cmd)).join('\n');
             console.log(shellCmds);
@@ -333,6 +349,7 @@ program
     .option('-u, --username <username>', 'ssh username on remote server')
     .option('-n, --no-cache', 'No cache for containers')
     .option('-s, --show-compose', 'output informations as in compose file')
+    .option('-i, --fake-container', 'generate labels for a simulated container')
     .option('-f, --filter <containerName>');
 
 program.parse(process.argv);
@@ -344,5 +361,5 @@ if (program.local) {
 }
 programOptions.noCache = !program.cache;
 
-loadContainers(program.filter);
+if (!program.fakeContainer) loadContainers(program.filter);
 execute();
